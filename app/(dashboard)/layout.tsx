@@ -1,10 +1,13 @@
 import { BottomNav } from "@/components/app/bottom-nav"
+import { requireSession } from "@/src/server/transport/next/auth-dal"
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  await requireSession()
+
   return (
     <div className="pulsar-page">
       {children}

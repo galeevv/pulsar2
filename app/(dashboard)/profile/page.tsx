@@ -17,17 +17,24 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { PreviewAlertAction } from "@/components/frontend-preview/preview-form"
+import { LogoutAction } from "@/components/auth/logout-action"
 import {
   PulsarActionRow,
   PulsarAssetCard,
   pulsarCtaClass,
 } from "@/components/app/pulsar-primitives"
 import { LoginMethodsManager } from "@/components/app/login-methods-manager"
-import { previewUser } from "@/src/frontend-preview/fixtures/mock-user"
+import { requireSession } from "@/src/server/transport/next/auth-dal"
 
-export default function ProfilePage() {
-  const user = previewUser
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    telegram?: "already-linked" | "error" | "linked"
+  }>
+}) {
+  const session = await requireSession()
+  const params = await searchParams
 
   return (
     <main className="pulsar-container">
@@ -42,7 +49,11 @@ export default function ProfilePage() {
           </p>
         </div>
 
-        <LoginMethodsManager email={user.email} telegramId={user.telegramId} />
+        <LoginMethodsManager
+          email={session.email}
+          telegramId={session.telegramId}
+          telegramStatus={params.telegram}
+        />
 
         <Link href="/support" className="group block">
           <PulsarActionRow
@@ -90,9 +101,7 @@ function LogoutConfirmDialog() {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Отмена</AlertDialogCancel>
-          <PreviewAlertAction className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive">
-            Выйти
-          </PreviewAlertAction>
+          <LogoutAction>Выйти</LogoutAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

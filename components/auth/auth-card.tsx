@@ -1,9 +1,15 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { ArrowLeftIcon, ArrowRightIcon, SendIcon } from "lucide-react"
 import { toast } from "sonner"
 
+import {
+  requestEmailLoginAction,
+  verifyEmailOtpAction,
+  type AuthActionResult,
+} from "@/app/(auth)/actions"
 import {
   PulsarAssetCard,
   pulsarCtaClass,
@@ -28,27 +34,92 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp"
 import { Separator } from "@/components/ui/separator"
-import { backendUnavailableMessage } from "@/src/frontend-preview/config"
+
+const idleState: AuthActionResult = { status: "idle" }
+const resendCooldownMilliseconds = 60_000
 
 export function AuthCard({
   authError,
   invite,
 }: {
-  authError?: "expired" | "used"
+  authError?: "expired" | "telegram" | "used"
   invite?: string
 }) {
+  const router = useRouter()
   const [email, setEmail] = React.useState("")
   const [isLinkSent, setIsLinkSent] = React.useState(false)
   const [otp, setOtp] = React.useState("")
+  const [state, setState] = React.useState<AuthActionResult>(idleState)
+  const [resendAvailableAt, setResendAvailableAt] = React.useState<
+    number | null
+  >(null)
+  const [resendSeconds, setResendSeconds] = React.useState(0)
+  const [pending, startTransition] = React.useTransition()
+  const otpInputRef = React.useRef<HTMLInputElement>(null)
   const authErrorMessage =
-    authError === "used"
-      ? "Ссылка уже использована. Запросите новую ссылку для входа."
-      : authError === "expired"
-        ? "Ссылка устарела. Запросите новую ссылку для входа."
-        : null
+    authError === "telegram"
+      ? "Не удалось войти через Telegram. Попробуйте ещё раз."
+      : authError === "used"
+        ? "Ссылка уже использована. Запросите новую ссылку для входа."
+        : authError === "expired"
+          ? "Ссылка устарела. Запросите новую ссылку для входа."
+          : null
 
-  function showUnavailable() {
-    toast.info(backendUnavailableMessage)
+  React.useEffect(() => {
+    if (!resendAvailableAt) return
+
+    function updateCountdown() {
+      const seconds = Math.max(
+        0,
+        Math.ceil((resendAvailableAt! - Date.now()) / 1000)
+      )
+      setResendSeconds(seconds)
+      if (seconds === 0) setResendAvailableAt(null)
+    }
+
+    updateCountdown()
+    const interval = window.setInterval(updateCountdown, 250)
+    return () => window.clearInterval(interval)
+  }, [resendAvailableAt])
+
+  function startResendCooldown() {
+    setResendSeconds(60)
+    setResendAvailableAt(Date.now() + resendCooldownMilliseconds)
+  }
+
+  function requestLogin() {
+    if (!email || pending || (isLinkSent && resendSeconds > 0)) return
+    startTransition(async () => {
+      const result = await requestEmailLoginAction({ email, invite })
+      setState(result)
+      if (result.status === "sent") {
+        setEmail(result.email ?? email)
+        setIsLinkSent(true)
+        setOtp("")
+        startResendCooldown()
+        toast.success(result.message)
+      }
+    })
+  }
+
+  function verifyOtp(completedOtp: string) {
+    const normalizedOtp = completedOtp.replace(/\D/g, "").slice(0, 6)
+    if (normalizedOtp.length !== 6 || pending) return
+    startTransition(async () => {
+      const result = await verifyEmailOtpAction({
+        email,
+        otp: normalizedOtp,
+        invite,
+      })
+      setState(result)
+      if (result.status === "authenticated") {
+        router.replace("/home")
+        router.refresh()
+      } else {
+        setOtp("")
+        window.requestAnimationFrame(() => otpInputRef.current?.focus())
+      }
+    })
   }
 
   return (
@@ -66,9 +137,11 @@ export function AuthCard({
             variant="outline"
             className="absolute top-4 left-4"
             aria-label="Изменить email"
+            disabled={pending}
             onClick={() => {
               setIsLinkSent(false)
               setOtp("")
+              setState(idleState)
             }}
           >
             <ArrowLeftIcon />
@@ -81,35 +154,32 @@ export function AuthCard({
           <CardDescription>
             {isLinkSent
               ? `Код отправлен на ${email}`
-              : "Подключиться к pulsar с помощью"}
+              : "Подключиться к Pulsar с помощью"}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 p-0">
           {isLinkSent ? (
             <div className="flex flex-col gap-4">
-              <form
-                className="flex flex-col gap-3"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  showUnavailable()
-                }}
-              >
-                <input type="hidden" name="email" value={email} />
-                <input type="hidden" name="invite" value={invite ?? ""} />
+              <div className="flex flex-col gap-3">
                 <FieldGroup>
                   <Field>
                     <FieldLabel className="sr-only">Код из письма</FieldLabel>
                     <InputOTP
+                      ref={otpInputRef}
                       name="otp"
                       value={otp}
-                      onChange={(value) =>
+                      onChange={(value) => {
                         setOtp(value.replace(/\D/g, "").slice(0, 6))
-                      }
+                        if (state.status === "error") setState(idleState)
+                      }}
                       maxLength={6}
                       inputMode="numeric"
                       autoComplete="one-time-code"
                       pattern="[0-9]*"
                       containerClassName="justify-center"
+                      disabled={pending}
+                      aria-invalid={state.status === "error"}
+                      onComplete={verifyOtp}
                     >
                       <InputOTPGroup>
                         {Array.from({ length: 6 }).map((_, index) => (
@@ -119,18 +189,28 @@ export function AuthCard({
                     </InputOTP>
                   </Field>
                 </FieldGroup>
-                <Button type="submit" disabled={otp.length !== 6}>
-                  Продолжить
-                </Button>
-              </form>
+                {state.status === "error" ? (
+                  <p className="text-center text-sm text-destructive">
+                    {state.message}
+                  </p>
+                ) : null}
+                {pending ? (
+                  <p className="text-center text-sm text-muted-foreground">
+                    Проверяем код…
+                  </p>
+                ) : null}
+              </div>
               <Button
                 type="button"
                 size="sm"
                 variant="link"
                 className="h-auto px-0 text-sm"
-                onClick={showUnavailable}
+                disabled={pending || resendSeconds > 0}
+                onClick={requestLogin}
               >
-                Отправить новую ссылку
+                {resendSeconds > 0
+                  ? `Отправить новое письмо через 0:${String(resendSeconds).padStart(2, "0")}`
+                  : "Отправить новое письмо"}
               </Button>
             </div>
           ) : (
@@ -139,12 +219,9 @@ export function AuthCard({
                 className="flex flex-col gap-4"
                 onSubmit={(event) => {
                   event.preventDefault()
-                  if (!email) return
-                  setIsLinkSent(true)
-                  showUnavailable()
+                  requestLogin()
                 }}
               >
-                <input type="hidden" name="invite" value={invite ?? ""} />
                 <FieldGroup>
                   <Field>
                     <FieldLabel htmlFor="email" className="sr-only">
@@ -158,6 +235,7 @@ export function AuthCard({
                         autoComplete="email"
                         placeholder="Email"
                         required
+                        disabled={pending}
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
                       />
@@ -167,6 +245,7 @@ export function AuthCard({
                           size="icon-sm"
                           variant="default"
                           aria-label="Продолжить"
+                          disabled={pending}
                         >
                           <ArrowRightIcon />
                         </InputGroupButton>
@@ -174,8 +253,12 @@ export function AuthCard({
                     </InputGroup>
                   </Field>
                 </FieldGroup>
-                {authErrorMessage ? (
-                  <p className="text-sm text-destructive">{authErrorMessage}</p>
+                {state.status === "error" || authErrorMessage ? (
+                  <p className="text-sm text-destructive">
+                    {state.status === "error"
+                      ? state.message
+                      : authErrorMessage}
+                  </p>
                 ) : null}
               </form>
 
@@ -189,7 +272,9 @@ export function AuthCard({
                 type="button"
                 variant="outline"
                 className={pulsarCtaClass}
-                onClick={showUnavailable}
+                onClick={() =>
+                  window.location.assign("/auth/telegram/start?intent=login")
+                }
               >
                 <SendIcon data-icon="inline-start" />С помощью Telegram
               </Button>

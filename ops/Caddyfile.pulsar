@@ -1,0 +1,18 @@
+pulsar-cloud.space, www.pulsar-cloud.space {
+  redir https://app.pulsar-cloud.space{uri} permanent
+}
+
+app.pulsar-cloud.space {
+  encode zstd gzip
+  reverse_proxy 127.0.0.1:3000
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  }
+}
+
+# panel.pulsar-cloud.space and sub.pulsar-cloud.space belong to Remnawave and
+# must remain in its own Caddy configuration/reverse-proxy blocks.

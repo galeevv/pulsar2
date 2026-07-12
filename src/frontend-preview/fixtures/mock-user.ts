@@ -4,7 +4,7 @@ export const previewUser = {
   id: "preview-user",
   email: "preview@pulsar.local",
   telegramId: null as string | null,
-  balanceRub: 225,
+  balanceRub: 0,
   role: "USER" as const,
   createdAt: new Date("2026-07-12T09:00:00.000Z"),
 }

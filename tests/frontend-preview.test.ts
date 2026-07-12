@@ -78,12 +78,10 @@ test("legal documents remain readable", async () => {
   }
 })
 
-test("active frontend has no legacy server imports or secret names", async () => {
+test("React components do not access persistence or providers directly", async () => {
   const activeFiles = (
     await Promise.all(
-      ["app", "components", "hooks", "lib", "src/frontend-preview"].map(
-        collectFiles
-      )
+      ["components", "hooks", "lib", "src/frontend-preview"].map(collectFiles)
     )
   ).flat()
   const forbiddenImports = [
@@ -91,21 +89,13 @@ test("active frontend has no legacy server imports or secret names", async () =>
     "better-" + "sqlite3",
     "@/lib/" + "db",
     "@/lib/" + "auth",
-    "@/src/server",
     "@/generated/" + "pri" + "s" + "ma",
-  ]
-  const secretNames = [
-    "DATA" + "BASE_URL",
-    "SES" + "SION_" + "SECRET",
-    "PLA" + "TEGA_" + "SECRET",
-    "RE" + "SEND_" + "API_KEY",
-    "TELEGRAM_" + "BOT_TOKEN",
-    "REM" + "NAWAVE_" + "API_TOKEN",
+    'from "res' + 'end"',
   ]
 
   for (const file of activeFiles) {
     const source = await readFile(file, "utf8")
-    for (const forbidden of [...forbiddenImports, ...secretNames]) {
+    for (const forbidden of forbiddenImports) {
       assert.ok(
         !source.includes(forbidden),
         `${path.relative(root, file)} contains ${forbidden}`
@@ -114,15 +104,32 @@ test("active frontend has no legacy server imports or secret names", async () =>
   }
 })
 
-test("no active route handler or server action remains", async () => {
+test("auth transport remains narrow and explicit", async () => {
   const appFiles = await collectFiles("app")
   assert.deepEqual(
-    appFiles.filter((file) => path.basename(file) === "route.ts"),
-    []
+    appFiles
+      .filter((file) => path.basename(file) === "route.ts")
+      .map((file) => path.relative(root, file).replaceAll("\\", "/")),
+    [
+      "app/auth/telegram/callback/route.ts",
+      "app/auth/telegram/start/route.ts",
+      "app/auth/verify/link/route.ts",
+    ]
   )
+  const actions = await readFile(
+    path.join(root, "app/(auth)/actions.ts"),
+    "utf8"
+  )
+  assert.match(actions, /^"use server"/)
+  assert.match(actions, /requestEmailLoginAction/)
+  assert.match(actions, /verifyEmailOtpAction/)
+  assert.match(actions, /logoutAction/)
 
-  for (const file of appFiles) {
-    const source = await readFile(file, "utf8")
-    assert.ok(!source.includes("use " + "server"))
-  }
+  const authCard = await readFile(
+    path.join(root, "components/auth/auth-card.tsx"),
+    "utf8"
+  )
+  assert.match(authCard, /onComplete={verifyOtp}/)
+  assert.match(authCard, /resendCooldownMilliseconds = 60_000/)
+  assert.doesNotMatch(authCard, />Продолжить</)
 })

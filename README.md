@@ -1,8 +1,7 @@
-# Pulsar 2.0 frontend
+# Pulsar 2.0
 
-Pulsar 2.0 currently contains the preserved Next.js App Router frontend for a
-commercial VPN service. The previous backend and business logic were removed
-and will be rebuilt separately.
+Pulsar 2.0 contains the preserved Next.js App Router frontend and a minimal
+production backend foundation for email passwordless authentication.
 
 ## What is available
 
@@ -12,21 +11,25 @@ and will be rebuilt separately.
   forms, dialogs, drawers, styles, animations, and public assets.
 - Read-only fixtures under `src/frontend-preview` for visual review.
 
-Preview actions never send HTTP requests, set cookies, write data, or call an
-external provider. They display a message that the action will become available
-after the new backend is connected.
+Email authentication is live through Server Actions. Other commercial-service
+screens remain read-only previews until their application services are rebuilt.
 
 ## Local development
 
 ```bash
 npm ci
+npm run db:migrate
 npm run dev
 ```
 
-`PULSAR_FRONTEND_PREVIEW=true` is optional in development and documents the
-intended local mode. Production builds remain safe: they use read-only display
-fixtures and do not imitate working authentication, payments, provisioning, or
-support persistence.
+Run the email outbox worker in a separate process:
+
+```bash
+npm run worker
+```
+
+Copy `.env.example` to `.env`, replace every secret, and verify the Resend sender
+domain before requesting a real login email. Never reuse the example values.
 
 ## Checks
 
@@ -42,3 +45,8 @@ See [Backend reset report](docs/BACKEND_RESET_REPORT.md) and
 [New backend starting point](docs/NEW_BACKEND_STARTING_POINT.md). Historical
 backend documents are retained in `docs/archive/old-backend` and are explicitly
 marked as archived.
+
+The authentication architecture and operations guide is in
+[Auth backend foundation](docs/AUTH_BACKEND.md).
+
+The VPS/operator handoff is in [VPS deployment](docs/VPS_DEPLOYMENT.md).

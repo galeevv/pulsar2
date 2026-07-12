@@ -43,7 +43,7 @@ import type {
 export default function SubscriptionPage() {
   const subscription = previewSubscription
   const settings = previewPricing
-  const status = subscription.status
+  const status = subscription?.status ?? "NONE"
   const hasActiveSubscription =
     subscription && ["ACTIVE", "TRIAL"].includes(status)
   const hasSubscriptionRecord = Boolean(subscription && status !== "NONE")

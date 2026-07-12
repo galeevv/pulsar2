@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id         String    @id @default(uuid())
+  email      String?   @unique
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  disabledAt DateTime?
+
+  identities AuthIdentity[]
+  sessions   Session[]
+  auditLogs  AuditLog[]
+}
+
+model AuthIdentity {
+  id              String   @id @default(uuid())
+  userId          String
+  provider        String
+  providerSubject String
+  verifiedAt      DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubject])
+  @@index([userId])
+}
+
+model LoginChallenge {
+  id               String    @id @default(uuid())
+  provider         String
+  purpose          String    @default("LOGIN")
+  subject          String
+  otpHash          String?
+  magicTokenHash   String?   @unique
+  oidcStateHash    String?   @unique
+  encryptedPayload String?
+  attempts         Int       @default(0)
+  maxAttempts      Int       @default(5)
+  expiresAt        DateTime
+  consumedAt       DateTime?
+  supersededAt     DateTime?
+  requestIpHash    String?
+  userAgentHash    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([provider, subject, createdAt])
+  @@index([expiresAt])
+}
+
+model Session {
+  id            String    @id @default(uuid())
+  userId        String
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  lastSeenAt    DateTime  @default(now())
+  ipHash        String?
+  userAgentHash String?
+  createdAt     DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  correlationId String
+  actorUserId   String?
+  action        String
+  targetType    String?
+  targetId      String?
+  outcome       String
+  ipHash        String?
+  metadataJson  String?
+  createdAt     DateTime @default(now())
+
+  actorUser User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([correlationId])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+}
+
+model OutboxEvent {
+  id                String    @id @default(uuid())
+  type              String
+  encryptedPayload  String
+  deduplicationKey  String    @unique
+  status            String    @default("PENDING")
+  attempts          Int       @default(0)
+  maxAttempts       Int       @default(8)
+  availableAt       DateTime  @default(now())
+  lockedAt          DateTime?
+  sentAt            DateTime?
+  providerMessageId String?
+  lastErrorCode     String?
+  correlationId     String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status, availableAt])
+  @@index([lockedAt])
+}
+
+model RateLimitBucket {
+  keyHash   String   @id
+  count     Int      @default(0)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}

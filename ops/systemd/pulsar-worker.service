@@ -1,0 +1,25 @@
+[Unit]
+Description=Pulsar 2.0 email outbox worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pulsar
+Group=pulsar
+WorkingDirectory=/opt/pulsar2
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/pulsar/pulsar.env
+ExecStart=/usr/bin/npm run worker
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/pulsar2/data
+
+[Install]
+WantedBy=multi-user.target

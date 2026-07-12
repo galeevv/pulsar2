@@ -3,7 +3,10 @@ import { AuthCard } from "@/components/auth/auth-card"
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ authError?: "expired" | "used"; invite?: string }>
+  searchParams: Promise<{
+    authError?: "expired" | "telegram" | "used"
+    invite?: string
+  }>
 }) {
   const params = await searchParams
 

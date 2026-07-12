@@ -41,7 +41,7 @@ export default function ReferralsPage() {
   const subscription = previewSubscription
   const invites = previewReferralInvites
   const payouts = previewPayouts
-  const subscriptionStatus = subscription.status
+  const subscriptionStatus = subscription?.status ?? "NONE"
   const shouldShowReferralEmpty =
     !profile?.isEnabled && (!subscription || subscriptionStatus === "NONE")
 

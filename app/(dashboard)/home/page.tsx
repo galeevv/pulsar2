@@ -19,7 +19,7 @@ import type {
 export default function HomePage() {
   const subscription = previewSubscription
   const settings = previewPricing
-  const status = subscription.status
+  const status = subscription?.status ?? "NONE"
   const renewalLabel =
     status === "NONE" ? "Оплатить подписку" : "Продлить подписку"
   const subscriptionSummary = getHomeSubscriptionSummary(subscription, status)
